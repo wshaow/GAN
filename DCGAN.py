@@ -57,7 +57,7 @@ def facc(label, pred):
 
 if __name__ == '__main__':
     # =====================================设置训练参数==========================================================
-    epochs = 2  # Set low by default for tests, set higher when you actually run this code.
+    epochs = 2000  # Set low by default for tests, set higher when you actually run this code.
     batch_size = 64
     latent_z_size = 100
 
@@ -183,7 +183,7 @@ if __name__ == '__main__':
                 metric.update([real_label, ], [output, ])
 
                 # train with fake image
-                fake = netG(latent_z)
+                fake = netG(latent_z)  # 使用detach使得在训练D网络的时候不更新G网络
                 output = netD(fake.detach()).reshape((-1, 1))
                 errD_fake = loss(output, fake_label)
                 errD = errD_real + errD_fake
@@ -216,15 +216,17 @@ if __name__ == '__main__':
 
         name, acc = metric.get()
         metric.reset()
-        # logging.info('\nbinary training acc at epoch %d: %s=%f' % (epoch, name, acc))
-        # logging.info('time: %f' % (time.time() - tic))
+        logging.info('\nbinary training acc at epoch %d: %s=%f' % (epoch, name, acc))
+        logging.info('time: %f' % (time.time() - tic))
 
         # Visualize one generated image for each epoch
-        # fake_img = fake[0]
-        # visualize(fake_img)
-        # plt.show()
+        fake_img = fake[0]
+        visualize(fake_img)
+        plt.show()
 
     # =================================================结果=========================================================
+    netD.save_params('netD.params')
+    netG.save_params('netG.params')
     num_image = 8
     for i in range(num_image):
         latent_z = mx.nd.random_normal(0, 1, shape=(1, latent_z_size, 1, 1), ctx=ctx)
