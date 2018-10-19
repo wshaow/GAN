@@ -57,7 +57,7 @@ def facc(label, pred):
 
 if __name__ == '__main__':
     # =====================================设置训练参数==========================================================
-    epochs = 2000  # Set low by default for tests, set higher when you actually run this code.
+    epochs = 20000  # Set low by default for tests, set higher when you actually run this code.
     batch_size = 64
     latent_z_size = 100
 
@@ -148,8 +148,10 @@ if __name__ == '__main__':
     loss = gluon.loss.SigmoidBinaryCrossEntropyLoss()
 
     # initialize the generator and the discriminator
-    netG.initialize(mx.init.Normal(0.02), ctx=ctx)
-    netD.initialize(mx.init.Normal(0.02), ctx=ctx)
+    # netG.initialize(mx.init.Normal(0.02), ctx=ctx)
+    # netD.initialize(mx.init.Normal(0.02), ctx=ctx)
+    netG.load_params('netG.params', ctx=ctx)
+    netD.load_params('netD.params', ctx=ctx)
 
     # trainer for the generator and the discriminator
     trainerG = gluon.Trainer(netG.collect_params(), 'adam', {'learning_rate': lr, 'beta1': beta1})
@@ -195,13 +197,14 @@ if __name__ == '__main__':
             ############################
             # (2) Update G network: maximize log(D(G(z)))
             ############################
-            with autograd.record():
-                fake = netG(latent_z)
-                output = netD(fake).reshape((-1, 1))
-                errG = loss(output, real_label)
-                errG.backward()
+            for epoch_g in range(4):
+                with autograd.record():
+                    fake = netG(latent_z)
+                    output = netD(fake).reshape((-1, 1))
+                    errG = loss(output, real_label)
+                    errG.backward()
 
-            trainerG.step(batch.data[0].shape[0])
+                trainerG.step(batch.data[0].shape[0])
 
             # Print log infomation every ten batches
             if iter % 10 == 0:
@@ -223,10 +226,12 @@ if __name__ == '__main__':
         fake_img = fake[0]
         visualize(fake_img)
         plt.show()
+        if (epoch+1) % 2000 == 0:
+            netD.save_params('netD_epoch_%s.params' % str(epoch))
+            netG.save_params('netG_epoch_%s.params' % str(epoch))
 
     # =================================================结果=========================================================
-    netD.save_params('netD.params')
-    netG.save_params('netG.params')
+
     num_image = 8
     for i in range(num_image):
         latent_z = mx.nd.random_normal(0, 1, shape=(1, latent_z_size, 1, 1), ctx=ctx)
