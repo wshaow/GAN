@@ -6,9 +6,9 @@
     1、如何对网络参数的不同部分进行初始化，比如卷积部分， 批归一化部分， gamma部分
     2、
 """
-from __future__ import print_function
+from __future__ import print_function  # 兼容python2版本
 import os
-import matplotlib as mpl
+import matplotlib as mpl  # 二维画图工具
 import tarfile
 import matplotlib.image as mpimg
 from matplotlib import pyplot as plt
@@ -31,46 +31,50 @@ def download_data(dataset):
     if not os.path.exists(dataset):  # 只在数据集不存在时才下载
         url = 'https://people.eecs.berkeley.edu/~tinghuiz/projects/pix2pix/datasets/%s.tar.gz' % (dataset)
         os.mkdir(dataset)  # 创建数据集文件
-        data_file = utils.download(url)  # 到指定的url下下载数据集
+        data_file = utils.download(url)  # 到指定的url下下载数据集 data_file 就是数据集的名字
         with tarfile.open(data_file) as tar:  # 解压文件到指定目录下（当前目录）
             tar.extractall(path='.')
-        os.remove(data_file)
+        os.remove(data_file)  # 解压完后将压缩包文件删除
 
 
-dataset = 'facades'
-img_wd = 256
-img_ht = 256
-train_img_path = '%s/train' % dataset
-val_img_path = '%s/val' % dataset
-
-
-def load_data(path, batch_size, is_reversed=False):
-    img_in_list = []
-    img_out_list = []
-    for path, _, fnames in os.walk(path):   # 遍历指定文件夹下的所有文件， path是路径， fnames是当前路径下的文件名
-        for fname in fnames:
-            if not fname.endswith('.jpg'):  # 读取所有的。jpg文件
-                continue
-            img = os.path.join(path, fname)
-            img_arr = mx.image.imread(img).astype(np.float32)/127.5 - 1  # 使用mx接口读取数据
-            img_arr = mx.image.imresize(img_arr, img_wd * 2, img_ht)   # 对数据进行resize， 大小不一致的情况是怎样的
-            # Crop input and output images
-            img_arr_in, img_arr_out = [mx.image.fixed_crop(img_arr, 0, 0, img_wd, img_ht),
-                                       mx.image.fixed_crop(img_arr, img_wd, 0, img_wd, img_ht)]
-            img_arr_in, img_arr_out = [nd.transpose(img_arr_in, (2, 0, 1)),
-                                       nd.transpose(img_arr_out, (2, 0, 1))]
-            img_arr_in, img_arr_out = [img_arr_in.reshape((1,) + img_arr_in.shape),
-                                       img_arr_out.reshape((1,) + img_arr_out.shape)]
-            img_in_list.append(img_arr_out if is_reversed else img_arr_in)
-            img_out_list.append(img_arr_in if is_reversed else img_arr_out)
-
-    return mx.io.NDArrayIter(data=[nd.concat(*img_in_list, dim=0), nd.concat(*img_out_list, dim=0)],
-                             batch_size=batch_size)
+dataset = 'facades'  # 数据集的名字
+img_wd = 256  # 图像的宽
+img_ht = 256  # 图像的高
+train_img_path = '%s/train' % dataset  # 训练集目录
+val_img_path = '%s/val' % dataset  # 测试集目录
 
 
 def visualize(img_arr):
     plt.imshow(((img_arr.asnumpy().transpose(1, 2, 0) + 1.0) * 127.5).astype(np.uint8))
     plt.axis('off')
+
+
+def load_data(path, batch_size, is_reversed=False):
+    img_in_list = []
+    img_out_list = []
+    for path, _, fnames in os.walk(path):   # 遍历指定文件夹下的所有文件， path是路径， fnames是当前路径下的文件名list
+        for fname in fnames:
+            if not fname.endswith('.jpg'):  # 读取所有的。jpg文件
+                continue
+            img = os.path.join(path, fname)  # 得到当前图像的完整路径
+            img_arr = mx.image.imread(img).astype(np.float32)/127.5 - 1  # 使用mx接口读取数据
+            img_arr = mx.image.imresize(img_arr, img_wd * 2, img_ht)   # 对数据进行resize，不足的使用插值，过大的下采样
+            # Crop input and output images
+            img_arr_in, img_arr_out = [mx.image.fixed_crop(img_arr, 0, 0, img_wd, img_ht),  # 图像剪裁， 左半部分是输入，
+                                       mx.image.fixed_crop(img_arr, img_wd, 0, img_wd, img_ht)]  # 右半部分是输出
+            img_arr_in, img_arr_out = [nd.transpose(img_arr_in, (2, 0, 1)),  # 由img_wd x img_hg x 3
+                                       nd.transpose(img_arr_out, (2, 0, 1))]  # 转变为 3 x img_wd x img_hg
+            # visualize(img_arr_in)
+            # plt.show()
+            # visualize(img_arr_out)
+            # plt.show()
+            img_arr_in, img_arr_out = [img_arr_in.reshape((1,) + img_arr_in.shape),  # 将3维转换为4维
+                                       img_arr_out.reshape((1,) + img_arr_out.shape)]
+            img_in_list.append(img_arr_out if is_reversed else img_arr_in)  # 是否将两个位置交换
+            img_out_list.append(img_arr_in if is_reversed else img_arr_out)
+
+    return mx.io.NDArrayIter(data=[nd.concat(*img_in_list, dim=0), nd.concat(*img_out_list, dim=0)],
+                             batch_size=batch_size)  # 返回一个迭代器
 
 
 def preview_train_data():
@@ -125,10 +129,16 @@ class UnetSkipUnit(HybridBlock):
                     self.model.add(block)
 
     def hybrid_forward(self, F, x):  # 是不是HybridBlock对应的是hybrid_forward前项函数
+        """
+
+        :param F: 这里F指mx.nd 或者是mx.sym的一个变量
+        :param x: 输入数据
+        :return:
+        """
         if self.outermost:
             return self.model(x)
         else:
-            return F.concat(self.model(x), x, dim=1)    # 这里F指的是什么
+            return F.concat(self.model(x), x, dim=1)   # 将输入的特征与网络得到的特征进行拼接，参考unet的网络结构
 
 
 # Define Unet generator
@@ -226,7 +236,7 @@ def set_network():
     return netG, netD, trainerG, trainerD
 
 
-class ImagePool():
+class ImagePool():  # 以一定的概率使用之前生成的图像样本
     def __init__(self, pool_size):
         self.pool_size = pool_size
         if self.pool_size > 0:
@@ -257,14 +267,14 @@ class ImagePool():
 
 
 def facc(label, pred):
-    pred = pred.ravel()
+    pred = pred.ravel()  # 将高维数组转换为1维数组
     label = label.ravel()
     return ((pred > 0.5) == label).mean()
 
 
 def train():
     image_pool = ImagePool(pool_size)
-    metric = mx.metric.CustomMetric(facc)
+    metric = mx.metric.CustomMetric(facc)  # 定义自己的尺度评价函数
 
     stamp = datetime.now().strftime('%Y_%m_%d-%H_%M')
     logging.basicConfig(level=logging.DEBUG)
